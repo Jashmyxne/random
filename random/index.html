@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RANDOM THOUGHTS</title>
+
+    <!-- Browser Tab Icon (Sunflower Favicon) -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌻</text></svg>">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="ran.css">
+</head>
+<body>
+
+<!-- Animated Shooting Stars Background Layer -->
+<div id="stars-container" aria-hidden="true">
+    <div class="shooting-star"></div>
+    <div class="shooting-star"></div>
+    <div class="shooting-star"></div>
+    <div class="shooting-star"></div>
+    <div class="shooting-star"></div>
+</div>
+
+<div class="container">
+    <header>
+        <h1>🌻⊹₊˚‧︵‿₊୨ᰔ୧₊‿︵‧˚₊⊹🌻</h1>
+        <h2>ωᥱℓᥴ𐐫mᥱ!</h2>
+        <h1>꧁⎝ 𓆩༺✧༻𓆪 ⎠꧂</h1>
+        <p>Write thoughts or cherished memories you want𐔌՞. .՞𐦯</p>
+    </header>
+
+    <section class="creator-card">
+        <form id="letterForm">
+            <div class="form-group">
+                <label for="recipientInput">To:</label>
+                <input type="text" id="recipientInput" list="recipientOptions" placeholder="Select or type a name..." required>
+                <datalist id="recipientOptions">
+                    <option value="Mom">
+                    <option value="Dad">
+                    <option value="Sister">
+                    <option value="Beloved">
+                    <option value="Other">
+                </datalist>
+            </div>
+            <div class="form-group">
+                <label for="title">Title:</label>
+                <input type="text" id="title" placeholder="About what" required>
+            </div>
+            <div class="form-group">
+                <label for="imageInput">Add Image(Optional):</label>
+                <input type="file" id="imageInput" accept="image/*">
+            </div>
+            <div class="form-group">
+                <label for="audioInput">Add Audio (Upload MP3 or paste YouTube link):</label>
+                <input type="file" id="audioInput" accept="audio/*">
+                <input type="url" id="audioUrl" placeholder="Or paste YouTube / Audio Link" style="margin-top: 0.5rem;">
+            </div>
+            <div class="form-group">
+                <label for="message">Your Letter:</label>
+                <textarea id="message" placeholder="Write your thoughts here..." required></textarea>
+            </div>
+            <div class="form-group">
+                <label for="password">Set a password:</label>
+                <input type="password" id="password" placeholder="Enter a password..." required>
+            </div>
+            <button type="submit" class="btn-submit">Click to Save</button>
+        </form>
+    </section>
+
+    <div class="filter-section">
+        <span>Filter by Person:</span>
+        <select id="filterSelect" onchange="displayLetters()">
+            <option value="ALL">Everyone</option>
+            <option value="Mom">Mom</option>
+            <option value="Dad">Dad</option>
+            <option value="Sister">Sister</option>
+            <option value="Beloved">Beloved</option>
+            <option value="Other">Other</option>
+        </select>
+    </div>
+
+    <main class="letters-grid" id="lettersGrid"></main>
+</div>
+
+<div id="letterModal" class="modal-overlay" onclick="closeModal(event)">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeModal(event)">&times;</span>
+        <div id="modalBody"></div>
+    </div>
+</div>
+
+<script>
+    let letters = JSON.parse(localStorage.getItem('loveLetters')) || [];
+    let isMuted = false;
+    let sessionUnlocked = new Set();
+
+    const letterForm = document.getElementById('letterForm');
+    const lettersGrid = document.getElementById('lettersGrid');
+    const filterSelect = document.getElementById('filterSelect');
+    const letterModal = document.getElementById('letterModal');
+    const modalBody = document.getElementById('modalBody');
+
+    const speakerOnSvg = `
+        <svg class="audio-vector-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor"></polygon>
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+        </svg>
+    `;
+
+    const speakerOffSvg = `
+        <svg class="audio-vector-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor"></polygon>
+            <line x1="23" y1="9" x2="17" y2="15"></line>
+            <line x1="17" y1="9" x2="23" y2="15"></line>
+        </svg>
+    `;
+
+    function getRecipientClass(recipient) {
+        const known = ['mom', 'dad', 'sister', 'beloved', 'other'];
+        const clean = recipient.toLowerCase();
+        return known.includes(clean) ? clean : 'custom';
+    }
+
+    function getYouTubeId(url) {
+        if (!url) return null;
+        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+        const match = url.match(regExp);
+        return (match && match[2].length === 11) ? match[2] : null;
+    }
+
+    letterForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const recipient = document.getElementById('recipientInput').value.trim();
+        const title = document.getElementById('title').value.trim();
+        const message = document.getElementById('message').value.trim();
+        const password = document.getElementById('password').value.trim();
+        const imageFile = document.getElementById('imageInput').files[0];
+        const audioFile = document.getElementById('audioInput').files[0];
+        const audioUrl = document.getElementById('audioUrl').value.trim();
+
+        const date = new Date().toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric', 
+            year: 'numeric' 
+        });
+
+        let imageData = null;
+        let audioData = audioUrl || null;
+
+        if (imageFile) imageData = await readFileAsDataURL(imageFile);
+        if (audioFile) audioData = await readFileAsDataURL(audioFile);
+
+        createAndSaveLetter(recipient, title, message, password, date, imageData, audioData);
+    });
+
+    function readFileAsDataURL(file) {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (event) => resolve(event.target.result);
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function createAndSaveLetter(recipient, title, message, password, date, imageData, audioData) {
+        const newLetter = {
+            id: Date.now(),
+            recipient,
+            title,
+            message,
+            password,
+            date,
+            image: imageData,
+            audio: audioData
+        };
+
+        letters.unshift(newLetter);
+        saveAndRender();
+        letterForm.reset();
+    }
+
+    function saveAndRender() {
+        try {
+            localStorage.setItem('loveLetters', JSON.stringify(letters));
+        } catch (e) {
+            console.warn("Storage quota reached.");
+        }
+        updateFilterOptions();
+        displayLetters();
+    }
+
+    function updateFilterOptions() {
+        const defaultOptions = ['ALL', 'Mom', 'Dad', 'Sister', 'Beloved', 'Other'];
+        const customRecipients = letters.map(l => l.recipient);
+        const uniqueRecipients = Array.from(new Set([...defaultOptions, ...customRecipients]));
+
+        const currentSelected = filterSelect.value;
+        filterSelect.innerHTML = uniqueRecipients.map(r => `
+            <option value="${r}">${r === 'ALL' ? 'Everyone' : escapeHtml(r)}</option>
+        `).join('');
+
+        if (uniqueRecipients.includes(currentSelected)) {
+            filterSelect.value = currentSelected;
+        }
+    }
+
+    function deleteLetter(id, event) {
+        if (event) event.stopPropagation();
+        letters = letters.filter(l => l.id !== id);
+        sessionUnlocked.delete(id);
+        saveAndRender();
+    }
+
+    function openLetter(id, event) {
+        if (event) event.stopPropagation();
+        const letter = letters.find(l => l.id === id);
+        
+        if (!sessionUnlocked.has(id)) {
+            const inputPassword = prompt("Enter the password to open this letter:");
+            const correctPassword = letter.password || '1234';
+
+            if (inputPassword === correctPassword) {
+                sessionUnlocked.add(id);
+                displayLetters();
+            } else if (inputPassword !== null) {
+                alert("Incorrect password!");
+            }
+        }
+    }
+
+    function toggleAudioMute(ytId) {
+        isMuted = !isMuted;
+        const iconBtn = document.getElementById('audioToggleBtn');
+        const audioPlayer = document.getElementById('modalAudio');
+        const ytPlayer = document.getElementById('ytAudioPlayer');
+
+        if (iconBtn) {
+            iconBtn.innerHTML = isMuted ? speakerOffSvg : speakerOnSvg;
+            iconBtn.classList.toggle('muted', isMuted);
+        }
+
+        if (audioPlayer) {
+            audioPlayer.muted = isMuted;
+        }
+
+        if (ytPlayer && ytId) {
+            const action = isMuted ? 'mute' : 'unMute';
+            ytPlayer.contentWindow.postMessage(`{"event":"command","func":"${action}","args":""}`, '*');
+        }
+    }
+
+    function zoomLetter(id) {
+        const letter = letters.find(l => l.id === id);
+        if (!letter || !sessionUnlocked.has(id)) return;
+
+        isMuted = false;
+
+        const imageHTML = letter.image 
+            ? `<img src="${letter.image}" alt="Attached Memory" class="modal-image">` 
+            : '';
+
+        let audioHTML = '';
+        const ytId = getYouTubeId(letter.audio);
+
+        if (ytId) {
+            audioHTML = `
+                <button id="audioToggleBtn" class="audio-icon-container" onclick="toggleAudioMute('${ytId}')" title="Mute/Unmute Music">
+                    ${speakerOnSvg}
+                </button>
+                <iframe id="ytAudioPlayer" 
+                        src="https://www.youtube.com/embed/${ytId}?enablejsapi=1&autoplay=1&loop=1&playlist=${ytId}" 
+                        allow="autoplay" 
+                        style="display:none; width:0; height:0; border:0;">
+                </iframe>`;
+        } else if (letter.audio) {
+            audioHTML = `
+                <button id="audioToggleBtn" class="audio-icon-container" onclick="toggleAudioMute()" title="Mute/Unmute Audio">
+                    ${speakerOnSvg}
+                </button>
+                <audio id="modalAudio" autoplay src="${letter.audio}" style="display:none;"></audio>`;
+        }
+
+        const tagClass = getRecipientClass(letter.recipient);
+
+        modalBody.innerHTML = `
+            ${audioHTML}
+            <span class="recipient-tag ${tagClass}">To: ${escapeHtml(letter.recipient)}</span>
+            <h2 class="letter-title" style="font-size: 2.5rem; margin: 0.5rem 0 0.5rem 0;">${escapeHtml(letter.title)}</h2>
+            ${imageHTML}
+            <p class="letter-body" style="font-size: 1.1rem; line-height: 1.6;">${escapeHtml(letter.message)}</p>
+            <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 1.5rem; text-align: right;">${letter.date}</div>
+        `;
+
+        letterModal.classList.add('active');
+
+        const audioPlayer = document.getElementById('modalAudio');
+        if (audioPlayer) {
+            audioPlayer.play().catch(() => console.log("Audio playback waiting for interaction."));
+        }
+    }
+
+    function closeModal(event) {
+        if (event.target === letterModal || event.target.classList.contains('modal-close')) {
+            const audioPlayer = document.getElementById('modalAudio');
+            if (audioPlayer) {
+                audioPlayer.pause();
+                audioPlayer.currentTime = 0;
+            }
+
+            const ytPlayer = document.getElementById('ytAudioPlayer');
+            if (ytPlayer) {
+                ytPlayer.src = "";
+            }
+
+            letterModal.classList.remove('active');
+        }
+    }
+
+    function displayLetters() {
+        const selectedRecipient = filterSelect.value;
+        const filteredLetters = selectedRecipient === 'ALL' 
+            ? letters 
+            : letters.filter(l => l.recipient === selectedRecipient);
+
+        if (filteredLetters.length === 0) {
+            lettersGrid.innerHTML = `
+                <div class="empty-state">
+                    No letters found here yet. Start by writing one 𑄝੭!!
+                    <br><br>
+                    ⋆⊱༻𖥸༺⊰⋆
+                </div>
+            `;
+            return;
+        }
+
+        lettersGrid.innerHTML = filteredLetters.map(letter => {
+            const isUnlocked = sessionUnlocked.has(letter.id);
+            const tagClass = getRecipientClass(letter.recipient);
+
+            if (isUnlocked) {
+                const imageHTML = letter.image 
+                    ? `<img src="${letter.image}" alt="Attached Memory" class="letter-image">` 
+                    : '';
+
+                const hasMusicTag = letter.audio ? `<span class="music-tag">🎵 Has Music</span>` : '';
+
+                return `
+                    <article class="letter-card unlocked" onclick="zoomLetter(${letter.id})">
+                        <div class="zoom-badge">Click to zoom</div>
+                        <div class="letter-header">
+                            <span class="recipient-tag ${tagClass}">To: ${escapeHtml(letter.recipient)}</span>
+                            ${hasMusicTag}
+                            <h2 class="letter-title">${escapeHtml(letter.title)}</h2>
+                        </div>
+                        <div class="letter-content-preview">
+                            ${imageHTML}
+                            <p class="letter-body">${escapeHtml(letter.message)}</p>
+                        </div>
+                        <div class="letter-footer">
+                            <span>${letter.date}</span>
+                            <button class="btn-delete" onclick="deleteLetter(${letter.id}, event)">Forget</button>
+                        </div>
+                    </article>
+                `;
+            } else {
+                return `
+                    <article class="letter-card">
+                        <div class="letter-header">
+                            <span class="recipient-tag ${tagClass}">To: ${escapeHtml(letter.recipient)}</span>
+                            <h2 class="letter-title">${escapeHtml(letter.title)}</h2>
+                        </div>
+                        <div id="content-${letter.id}" style="margin-bottom: 1.2rem;">
+                            <button class="btn-submit" onclick="openLetter(${letter.id}, event)" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Open Letter 🔒</button>
+                        </div>
+                        <div class="letter-footer">
+                            <span>${letter.date}</span>
+                            <button class="btn-delete" onclick="deleteLetter(${letter.id}, event)">Forget</button>
+                        </div>
+                    </article>
+                `;
+            }
+        }).join('');
+    }
+
+    function escapeHtml(str) {
+        return str.replace(/[&<>"']/g, (m) => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[m]));
+    }
+
+    updateFilterOptions();
+    displayLetters();
+</script>
+
+</body>
+</html>
